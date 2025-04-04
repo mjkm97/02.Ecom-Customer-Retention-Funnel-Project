@@ -307,14 +307,14 @@ https://www.kaggle.com/code/rubenman/maven-fuzzy-factory
 
 **[Retention 비율 계산을 위한 구매 건 수 집계 &  비율]**
 
-전체고객 
-![image (42)](https://github.com/user-attachments/assets/1fb8b25c-9352-44fb-9826-bb0e82c30a1c)
+전체고객
+<!-- 전체 고객 -->
+<img width="810" alt="image (42)" src="https://github.com/user-attachments/assets/1fb8b25c-9352-44fb-9826-bb0e82c30a1c" />
 <img width="810" alt="image (41)" src="https://github.com/user-attachments/assets/6c0dfe36-d2e0-4992-bbc8-a963ec6da70b" />
 
-
-VIP 
-<img width="809" alt="image (44)" src="https://github.com/user-attachments/assets/d0e9a531-1bd6-48cb-b5c3-d41819552aa7" />
-<img width="820" alt="image (43)" src="https://github.com/user-attachments/assets/56ad4507-712b-4ae4-9ec5-daf341637531" />
+<!-- VIP 고객 -->
+<img width="810" alt="image (44)" src="https://github.com/user-attachments/assets/d0e9a531-1bd6-48cb-b5c3-d41819552aa7" />
+<img width="810" alt="image (43)" src="https://github.com/user-attachments/assets/56ad4507-712b-4ae4-9ec5-daf341637531" />
 
 
 📌  **결론: 추가로 분석해볼 수 있는 데이터 포인트**
