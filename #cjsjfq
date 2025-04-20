@@ -1,0 +1,65 @@
+WITH customer_orders AS (
+    SELECT
+        o.user_id,
+        SUM(o.price_usd) AS total_spent,
+        COUNT(DISTINCT o.order_id) AS order_count
+    FROM orders o
+    GROUP BY o.user_id
+),
+avg_order_value AS (
+    SELECT AVG(price_usd) * 1.5 AS vip_threshold FROM orders -- 평균 주문 금액의 1.5배를 VIP 기준으로 설정(전체 주문 고객의 10%를 VIP라고 정의)
+),
+customer_segments AS (
+    SELECT
+        co.user_id,
+        CASE
+            WHEN co.total_spent >= (SELECT vip_threshold FROM avg_order_value) THEN 'VIP'
+            WHEN co.total_spent < (SELECT vip_threshold FROM avg_order_value) THEN 'Non_VIP'
+			END AS segment
+    FROM customer_orders co
+),
+ranked_pageviews AS (
+SELECT
+	wp.website_session_id,
+	ws.user_id,
+	ws.created_at,
+	wp.pageview_url,
+	ROW_NUMBER() OVER (PARTITION BY ws.user_id,
+	wp.website_session_id
+ORDER BY
+	wp.created_at) as step_num
+FROM
+	website_sessions ws
+JOIN website_pageviews wp 
+ON wp.website_session_id = ws.website_session_id
+),
+funnel_flow AS (
+SELECT
+	rp.website_session_id,
+	rp.user_id,
+	rp.created_at,
+	GROUP_CONCAT(rp.pageview_url ORDER BY rp.step_num separator ' → ') AS user_funnel_flow
+FROM
+	ranked_pageviews rp
+GROUP BY
+	rp.user_id,
+	rp.website_session_id,
+	rp.created_at
+ORDER BY
+	rp.user_id,
+	rp.website_session_id
+)
+SELECT
+	COALESCE(cs.segment, 'Non-Buyer'),
+	(COUNT(CASE WHEN ff.user_funnel_flow like '/home%' THEN 1 END) - COUNT(CASE WHEN ff.user_funnel_flow like '/home %' THEN 1 END)) / COUNT(CASE WHEN ff.user_funnel_flow LIKE '/home%' THEN 1 END) * 100 AS `/home`,
+	(COUNT(CASE WHEN ff.user_funnel_flow like '/lander-1%' THEN 1 END) - COUNT(CASE WHEN ff.user_funnel_flow like '/lander-1 %' THEN 1 END)) / COUNT(CASE WHEN ff.user_funnel_flow LIKE '/lander-1%' THEN 1 END) * 100 AS `/lander-1`,
+  (COUNT(CASE WHEN ff.user_funnel_flow like '/lander-2%' THEN 1 END) - COUNT(CASE WHEN ff.user_funnel_flow like '/lander-2 %' THEN 1 END)) / COUNT(CASE WHEN ff.user_funnel_flow LIKE '/lander-2%' THEN 1 END) * 100 AS `/lander-2`,
+  (COUNT(CASE WHEN ff.user_funnel_flow like '/lander-3%' THEN 1 END) - COUNT(CASE WHEN ff.user_funnel_flow like '/lander-3 %' THEN 1 END)) / COUNT(CASE WHEN ff.user_funnel_flow LIKE '/lander-3%' THEN 1 END) * 100 AS `/lander-3`,
+  (COUNT(CASE WHEN ff.user_funnel_flow like '/lander-4%' THEN 1 END) - COUNT(CASE WHEN ff.user_funnel_flow like '/lander-4 %' THEN 1 END)) / COUNT(CASE WHEN ff.user_funnel_flow LIKE '/lander-4%' THEN 1 END) * 100 AS `/lander-4`,
+  (COUNT(CASE WHEN ff.user_funnel_flow like '/lander-5%' THEN 1 END) - COUNT(CASE WHEN ff.user_funnel_flow like '/lander-5 %' THEN 1 END)) / COUNT(CASE WHEN ff.user_funnel_flow LIKE '/lander-5%' THEN 1 END) * 100 AS `/lander-5`
+FROM
+	funnel_flow ff
+LEFT JOIN customer_segments cs
+ON ff.user_id = cs.user_id 
+GROUP BY
+	cs.segment;
