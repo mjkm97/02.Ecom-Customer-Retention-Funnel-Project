@@ -1,0 +1,49 @@
+WITH customer_orders AS (
+    SELECT
+        o.user_id,
+        SUM(o.price_usd) AS total_spent,
+        COUNT(DISTINCT o.order_id) AS order_count
+    FROM orders o
+    GROUP BY o.user_id
+),
+avg_order_value AS (
+    SELECT AVG(price_usd) * 1.5 AS vip_threshold FROM orders -- VIP 기준: 평균 주문 금액의 1.5배
+),
+customer_segments AS (
+    SELECT
+        co.user_id,
+        CASE
+            WHEN co.total_spent >= (SELECT vip_threshold FROM avg_order_value) THEN 'VIP'
+            ELSE 'Regular Customer'
+        END AS segment
+    FROM customer_orders co
+),
+ranked_pageviews AS (
+    SELECT
+        wp.website_session_id,
+        ws.user_id,
+        ws.created_at,
+        wp.pageview_url,
+        wp.created_at AS page_creation,
+        ROW_NUMBER() OVER (PARTITION BY ws.user_id, wp.website_session_id ORDER BY wp.created_at) AS step_num
+    FROM website_sessions ws
+    JOIN website_pageviews wp ON wp.website_session_id = ws.website_session_id
+),
+time_diff_calculated AS (
+    SELECT 
+        rp.user_id,
+        COALESCE(cs.segment, 'Non Buyer') AS segment,
+        rp.step_num,
+        TIMESTAMPDIFF(SECOND, LAG(rp.page_creation) OVER (PARTITION BY rp.user_id, rp.website_session_id ORDER BY rp.step_num), rp.page_creation) AS time_diff
+    FROM ranked_pageviews rp
+    LEFT JOIN customer_segments cs ON rp.user_id = cs.user_id
+)
+SELECT 
+    segment,
+    step_num AS page,
+    AVG(time_diff) AS avg_time_on_page
+FROM time_diff_calculated
+WHERE time_diff IS NOT NULL
+GROUP BY segment, step_num
+HAVING COUNT(time_diff) > 0
+ORDER BY segment, step_num;
