@@ -1,0 +1,13 @@
+#고객 세분화 및 고객 등급 정의 
+
+#최근 1년간 주문액
+SELECT 
+    price_usd 
+FROM orders 
+WHERE created_at BETWEEN '2014-03-19' AND '2015-03-19';
+
+#최근 3년간 주문액
+SELECT 
+    price_usd 
+FROM orders 
+WHERE created_at BETWEEN '2012-03-19' AND '2015-03-19';
