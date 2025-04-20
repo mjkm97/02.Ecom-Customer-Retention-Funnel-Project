@@ -61,5 +61,4 @@ FROM
 	funnel_flow ff
 LEFT JOIN customer_segments cs
 ON ff.user_id = cs.user_id 
-GROUP BY
-	cs.segment;
+GROUP BY cs.segment;
