@@ -1,0 +1,67 @@
+#고객 그룹별 각 단계 이탈률
+
+WITH customer_orders AS (
+    SELECT
+        o.user_id,
+        SUM(o.price_usd) AS total_spent,
+        COUNT(DISTINCT o.order_id) AS order_count
+    FROM orders o
+    GROUP BY o.user_id
+),
+avg_order_value AS (
+    SELECT AVG(price_usd) * 1.5 AS vip_threshold FROM orders -- 평균 주문 금액의 1.5배를 VIP 기준으로 설정(전체 주문 고객의 10%를 VIP라고 정의)
+),
+customer_segments AS (
+    SELECT
+        co.user_id,
+        CASE
+            WHEN co.total_spent >= (SELECT vip_threshold FROM avg_order_value) THEN 'VIP'
+            WHEN co.total_spent < (SELECT vip_threshold FROM avg_order_value) THEN 'Non_VIP'
+			END AS segment
+    FROM customer_orders co
+),
+ranked_pageviews as (
+select
+	wp.website_session_id,
+	ws.user_id,
+	ws.created_at,
+	wp.pageview_url,
+	row_number() over (partition by ws.user_id,
+	wp.website_session_id
+order by
+	wp.created_at) as step_num
+from
+	website_sessions ws
+join website_pageviews wp on
+	wp.website_session_id = ws.website_session_id
+),
+funnel_flow as (
+select
+	rp.website_session_id,
+	rp.user_id,
+	rp.created_at,
+	GROUP_CONCAT(rp.pageview_url order by rp.step_num separator ' → ') as user_funnel_flow
+from
+	ranked_pageviews rp
+group by
+	rp.user_id,
+	rp.website_session_id,
+	rp.created_at
+order by
+	rp.user_id,
+	rp.website_session_id
+)
+select
+	coalesce (cs.segment, 'Non Buyer') as segment,
+	(count(case when ff.user_funnel_flow like '%/home%' or ff.user_funnel_flow like '%lander%' then 1 end)-count(case when ff.user_funnel_flow like '%/products%' then 1 end))/count(case when ff.user_funnel_flow like '%/home%' or ff.user_funnel_flow like '%lander%' then 1 end) * 100 as `/home or /lander → /products`,
+	(count(case when ff.user_funnel_flow like '%/products%' then 1 end)-count(case when ff.user_funnel_flow like '%/the-original-mr-fuzzy%' or ff.user_funnel_flow like '%/the-forever-love-bear%' or ff.user_funnel_flow like '%/the-birthday-sugar-panda%' or ff.user_funnel_flow like '%/the-hudson-river-mini-bear%' then 1 end))/count(case when ff.user_funnel_flow like '%/products%' then 1 end) * 100 as `/products → /product_detail`,
+	(count(case when ff.user_funnel_flow like '%/the-original-mr-fuzzy%' or ff.user_funnel_flow like '%/the-forever-love-bear%' or ff.user_funnel_flow like '%/the-birthday-sugar-panda%' or ff.user_funnel_flow like '%/the-hudson-river-mini-bear%' then 1 end)-count(case when ff.user_funnel_flow like '%/cart%' then 1 end))/count(case when ff.user_funnel_flow like '%/the-original-mr-fuzzy%' or ff.user_funnel_flow like '%/the-forever-love-bear%' or ff.user_funnel_flow like '%/the-birthday-sugar-panda%' or ff.user_funnel_flow like '%/the-hudson-river-mini-bear%' then 1 end) * 100 as `/product_detail → /cart`,
+	(count(case when ff.user_funnel_flow like '%/cart%' then 1 end)-count(case when ff.user_funnel_flow like '%/shipping%' then 1 end))/count(case when ff.user_funnel_flow like '%/cart%' then 1 end) * 100 as `/cart →/shipping`,
+	(count(case when ff.user_funnel_flow like '%/shipping%' then 1 end)-count(case when ff.user_funnel_flow like '%/billing%' then 1 end))/count(case when ff.user_funnel_flow like '%/shipping%' then 1 end) * 100 as `/shipping →/billing`,
+	(count(case when ff.user_funnel_flow like '%/billing%' then 1 end)-count(case when ff.user_funnel_flow like '%/thank-you-for-your-order' then 1 end))/count(case when ff.user_funnel_flow like '%/billing%' then 1 end) * 100 as `/billing →/thank0you-for-your-order`
+from
+	funnel_flow ff
+left join customer_segments cs
+on ff.user_id = cs.user_id 
+group by
+	cs.segment;
